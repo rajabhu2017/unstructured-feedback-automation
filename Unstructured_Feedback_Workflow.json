@@ -1,0 +1,803 @@
+{
+  "name": "Unstructured_Feedback_Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Customer Feedback Form",
+        "formDescription": "Share your valuable feedback",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Name",
+              "placeholder": "Vivek Yadav"
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email",
+              "placeholder": "example@.com"
+            },
+            {
+              "fieldLabel": "Feedback",
+              "fieldType": "textarea",
+              "placeholder": "Describe your experience in your own words. You may write in any language."
+            },
+            {
+              "fieldLabel": "Attach a photo, video, or voice note",
+              "fieldType": "file"
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -1200,
+        -80
+      ],
+      "id": "cab66f47-e42a-4fe9-96b3-d2e0a44432bd",
+      "name": "On form submission",
+      "webhookId": "0326b97f-70e0-42b5-93cf-2b4b5d0e9717"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -480,
+        544
+      ],
+      "id": "1cd31f1d-4283-4f05-9532-d8c33f563df5",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "fAtROzqWQj3IPD11",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a customer support communication assistant for a car service business.\n\nWrite ONE professional, concise HTML email response to the customer.\n\nCustomer Name:\n{{ $('On form submission').item.json.Name }}\n\nCustomer Feedback:\n{{ $('On form submission').item.json.Feedback }}\n\nSentiment:\n{{ JSON.parse($('Classify Feedback').item.json.text).sentiment }}\n\nIssue Type:\n{{ JSON.parse($('Classify Feedback').item.json.text).issue_type }}\n\nSeverity:\n{{ JSON.parse($('Classify Feedback').item.json.text).severity }}\n\nEscalation:\n{{ JSON.parse($('Classify Feedback').item.json.text).escalate }}\n\nRules:\n\n- If the feedback is positive, thank the customer and appreciate their experience.\n- If the feedback is neutral, acknowledge the feedback professionally.\n- If the feedback is negative, apologize and acknowledge the concern.\n- If the issue has been escalated, do not promise a specific resolution or timeline.\n- Do not promise refunds, compensation, repairs, manager callbacks, or specific outcomes unless explicitly provided.\n- Keep the message concise.\n- Return only the HTML email body.\n- No markdown.\n- No code fences.\n- No explanation.\n\nEnd with:\n\nRegards,\nCustomer Support Team",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        240,
+        144
+      ],
+      "id": "1d68fb43-ff7d-45e6-a4a3-b45855017e62",
+      "name": "Analyze Sentiment"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an AI customer feedback intelligence system for a car service business.\n\nYour job is to analyze ALL available evidence about the customer's feedback and determine what action the business should take.\n\nThe customer may provide:\n- written feedback\n- an audio recording that has been transcribed\n- an image\n- any combination of these\n\nThe feedback may be written or spoken in any language.\n\nDo not ask the customer to classify their feedback.\nDo not use a customer rating because no rating is provided.\nDo not invent facts.\n\nAnalyze the actual evidence available from every non-empty input.\n\nCustomer Name:\n{{ $('On form submission').first().json.Name || '' }}\n\nCustomer Email:\n{{ $('On form submission').first().json.Email || '' }}\n\nFeedback Text:\n{{ $('On form submission').first().json.Feedback || '' }}\n\nImage Analysis:\n{{ $json['1'].content[0].text }}\n\nAudio Transcription:\n{{ $if(\n  $('Transcribe a recording').isExecuted,\n  $('Transcribe a recording').first().json.text || '',\n  ''\n) }}\n\n\nIMPORTANT INPUT HANDLING:\n\nAnalyze ALL non-empty sources together:\n\n1. Feedback Text\n2. Image Analysis\n3. Audio Transcription\n\nThe Feedback Text may be empty.\n\nIf Feedback Text is empty but Image Analysis contains information, analyze the image evidence as customer feedback.\n\nIf Feedback Text is empty but Audio Transcription contains information, analyze the audio transcription as customer feedback.\n\nIf multiple sources contain information, combine the evidence from all available sources.\n\nOnly classify the submission as having no feedback when ALL available feedback sources are empty.\n\nNever say that an image or audio was unavailable when the corresponding analysis or transcription contains information.\n\n\nLANGUAGE:\n\nDetect the language from the customer's actual feedback.\n\nThe customer's feedback may be in any language.\n\nDo not assume English.\n\nIf multiple feedback sources use different languages, identify the primary language of the customer's actual communication.\n\nThe \"summary\" MUST ALWAYS be written in clear professional English.\n\nThe \"escalation_reason\" MUST ALWAYS be written in clear professional English.\n\nDo not write the summary or escalation_reason in the customer's original language.\n\n\nSENTIMENT:\n\nDetermine sentiment from the customer's actual wording and communication.\n\nUse:\n- Positive for praise, satisfaction, appreciation, or clearly positive feedback.\n- Negative for complaints, dissatisfaction, frustration, anger, or clearly negative feedback or damage images.\n- Neutral for factual incident reports, information requests, or situations where emotional sentiment is not expressed.\n\nDo not automatically classify sentiment as Negative only because an image shows minor vehicle damage if serious you can show.\n\nHowever, serious visual evidence must still affect issue_type, severity, and escalation.\n\n\nISSUE TYPE:\n\nDetermine the issue_type from the actual evidence\\image.\n\nExamples include:\n- Vehicle Damage\n- Collision / Accident\n- Safety Issue\n- Service Quality\n- Delay\n- Staff Conduct\n- Billing / Payment\n- Refund\n- Vehicle Repair\n- Maintenance\n- Complaint\n- Praise\n- Suggestion\n- Information Request\n- Other\n\nUse the most specific issue type supported by the evidence.\n\n\nSEVERITY:\n\nDetermine severity based on the seriousness of the actual issue.\n\nLow:\nMinor inconvenience, cosmetic issue, general comment, simple suggestion.\n\nMedium:\nMeaningful service problem or moderate issue requiring attention but not indicating immediate serious risk.\n\nHigh:\nSerious service failure, significant vehicle damage, substantial financial/service issue, or a problem requiring prompt human intervention.\n\nCritical:\nImmediate or potentially serious safety risk, major accident damage, possible structural damage, serious physical danger, or another situation requiring urgent human intervention.\n\nDo not determine severity from customer rating.\n\n\nESCALATION:\n\nSet \"escalate\": true when there is evidence of:\n\n- safety risk\n- accident\n- physical danger\n- significant vehicle damage\n- collision damage\n- possible structural damage\n- damaged doors affecting vehicle operation or safety\n- legal or compliance concerns\n- serious financial dispute\n- refund dispute\n- repeated unresolved service failure\n- serious staff misconduct\n- threat of public escalation\n- major service failure\n- any situation requiring human intervention\n\nSet \"escalate\": false for ordinary praise, general suggestions, minor complaints, or normal service comments that do not require human intervention.\n\nFor significant vehicle damage or possible safety concerns identified through image analysis, escalation should normally be true because human inspection or intervention may be required.\n\n\nIMAGE EVIDENCE:\n\nTreat Image Analysis as valid evidence from the customer's submitted image.\n\nIf Image Analysis describes vehicle damage, collision evidence, safety concerns, damaged parts, or structural concerns, use that information in determining:\n\n- issue_type\n- severity\n- escalation\n- summary\n\nDo not ignore visual evidence because the written customer message is short or empty.\n\nFor example:\n\nCustomer Feedback:\n\"See the car picture.\"\n\nImage Analysis:\n\"Front and rear doors are severely crushed and the rocker panel is damaged.\"\n\nThe classification must use the visual evidence.\n\nDo not invent damage that is not described in Image Analysis.\n\n\nAUDIO EVIDENCE:\n\nTreat Audio Transcription as valid customer feedback.\n\nIf Feedback Text is empty but Audio Transcription contains a complaint or issue, classify the feedback using the transcription.\n\nIf both written feedback and audio transcription are available, consider both.\n\nDo not ignore audio evidence because written Feedback Text is empty.\n\n\nSUMMARY:\n\nThe summary must ALWAYS be written in professional English.\n\nIt must accurately summarize the customer's feedback and all relevant evidence.\n\nFor image-based feedback, describe only the damage or observations explicitly supported by Image Analysis.\n\nFor audio feedback, summarize the meaning of the transcription rather than commenting on the fact that it was transcribed.\n\nDo not invent facts or actions that did not occur.\n\nDo not include unnecessary customer personal information in the summary.\n\n\nOUTPUT:\n\nReturn ONLY a valid JSON object.\n\nReturn exactly this structure:\n\n{\n  \"language\": \"\",\n  \"sentiment\": \"Positive | Negative | Neutral\",\n  \"issue_type\": \"\",\n  \"severity\": \"Low | Medium | High | Critical\",\n  \"customer_intent\": \"Praise | Complaint | Suggestion | Information | Other\",\n  \"escalate\": true,\n  \"escalation_reason\": \"\",\n  \"summary\": \"\"\n}\n\nThe JSON must be valid.\nDo not use Markdown.\nDo not add explanations before or after the JSON.",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": []
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -176,
+        -304
+      ],
+      "id": "a6f13c0f-0093-4545-885c-f75574d9ba52",
+      "name": "Classify Feedback"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('On form submission').item.json.Email }}",
+        "subject": "=We've received your feedback {{ $('On form submission').item.json.Name }}",
+        "message": "=<p>Dear {{ $('On form submission').item.json.Name }},</p> <p>Thank you for taking the time to share your experience with us. We're sorry to hear it didn't meet your expectations.</p> <p>Your feedback has been shared with our team, and someone will personally reach out to you shortly to follow up.</p> <p>We genuinely appreciate you bringing this to our attention.</p> <p>Regards,<br>Customer Support Team</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        304,
+        -256
+      ],
+      "id": "62f4c978-4e11-49ef-9d86-5f5cea041ae4",
+      "name": "Notify Customer - Escalated",
+      "webhookId": "c9240186-b5ce-4774-ac30-2a86058ba839",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "53dcNn7kTM0Sh08K",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "rrreactions5@gmail.com",
+        "subject": "=URGENT: Escalated feedback from {{ $('On form submission').item.json.Name }}",
+        "message": "=<h2>Customer Feedback Escalation</h2>\n\n<p><strong>Customer:</strong>\n{{ $('On form submission').item.json.Name }}</p>\n\n<p><strong>Email:</strong>\n{{ $('On form submission').item.json.Email }}</p>\n\n<p><strong>Language:</strong>\n{{ JSON.parse($('Classify Feedback').item.json.text).language }}</p>\n\n<p><strong>Sentiment:</strong>\n{{ JSON.parse($('Classify Feedback').item.json.text).sentiment }}</p>\n\n<p><strong>Issue Type:</strong>\n{{ JSON.parse($('Classify Feedback').item.json.text).issue_type }}</p>\n\n<p><strong>Severity:</strong>\n{{ JSON.parse($('Classify Feedback').item.json.text).severity }}</p>\n\n<p><strong>Customer Intent:</strong>\n{{ JSON.parse($('Classify Feedback').item.json.text).customer_intent }}</p>\n\n<p><strong>Escalation Reason:</strong>\n{{ JSON.parse($('Classify Feedback').item.json.text).escalation_reason }}</p>\n\n<p><strong>Summary:</strong>\n{{ JSON.parse($('Classify Feedback').item.json.text).summary }}</p>\n\n<p>Please review this feedback and take appropriate action.</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        112,
+        -64
+      ],
+      "id": "bb2be321-9472-4879-aabb-e3f3698ba2dd",
+      "name": "Send a message to company",
+      "webhookId": "694110e9-9d21-4f90-9648-46fc6ddd56c6",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "53dcNn7kTM0Sh08K",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('On form submission').item.json.Email }}",
+        "subject": "=Feedback from  {{ $('On form submission').item.json.Name }}",
+        "message": "={{ $json.text }}\"",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        576,
+        -240
+      ],
+      "id": "85388a5b-8279-4413-84ea-359ebe0289a4",
+      "name": "Response Email to consumer",
+      "webhookId": "5d5aad88-fda5-404b-9214-f004fd86aeca",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "53dcNn7kTM0Sh08K",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0cba5119-ae95-4042-af70-148f62a68fca",
+              "leftValue": "={{ JSON.parse($json.text).escalate }}",
+              "rightValue": "True",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -144,
+        16
+      ],
+      "id": "2cc93777-e26c-4da3-b537-492b9ec8c0ae",
+      "name": "If Escalated"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1geBHh8WfMcZcuzhWcQJQVAyN30nnqk2QCFc3GwEvi0Y",
+          "mode": "list",
+          "cachedResultName": "Feedback_Sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1geBHh8WfMcZcuzhWcQJQVAyN30nnqk2QCFc3GwEvi0Y/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1geBHh8WfMcZcuzhWcQJQVAyN30nnqk2QCFc3GwEvi0Y/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{ $('On form submission').item.json.Name }}",
+            "Email": "={{ $('On form submission').item.json.Email }}",
+            "Sentiment": "={{ JSON.parse($('Classify Feedback').item.json.text).sentiment }} ",
+            " Escalated": "={{ JSON.parse($('Classify Feedback').item.json.text).escalate  }}",
+            "Customer Notified": "={{ true}}",
+            "Input Type": "={{ $('On form submission').item.binary?.Attach_a_photo__video__or_voice_note?.mimeType || 'Text' }}",
+            "Language": "={{ JSON.parse($('Classify Feedback').item.json.text).language }}",
+            "Feedback / Transcription": "={{ $('On form submission').item.json.Feedback }}",
+            "Visual Summary": "={{ $('Analyze image').isExecuted ? $('Analyze image').item.json.content : '' }}",
+            "Issue Type": "={{ JSON.parse($('Classify Feedback').item.json.text).issue_type }}",
+            "Severity": "={{ JSON.parse($('Classify Feedback').item.json.text).severity }}",
+            "Customer Intent": "={{ JSON.parse($('Classify Feedback').item.json.text).customer_intent }}",
+            "Escalation Reason": "={{ JSON.parse($('Classify Feedback').item.json.text).escalation_reason }}",
+            "AI Summary": "={{ JSON.parse($('Classify Feedback').item.json.text).summary }}",
+            "Submitted At": "={{ $now }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Input Type",
+              "displayName": "Input Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Language",
+              "displayName": "Language",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Feedback / Transcription",
+              "displayName": "Feedback / Transcription",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Visual Summary",
+              "displayName": "Visual Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Sentiment",
+              "displayName": "Sentiment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Issue Type",
+              "displayName": "Issue Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Severity",
+              "displayName": "Severity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Customer Intent",
+              "displayName": "Customer Intent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": " Escalated",
+              "displayName": " Escalated",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Escalation Reason",
+              "displayName": "Escalation Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Customer Notified",
+              "displayName": "Customer Notified",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Submitted At",
+              "displayName": "Submitted At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        608,
+        32
+      ],
+      "id": "b5676dd5-3413-4612-95bc-439a2ac59b33",
+      "name": "DataBase",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "zMsuYQDpMIjyYr6q",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list"
+        },
+        "text": "Analyze this uploaded image as evidence for customer feedback about a car service business.\n\nDescribe clearly and concisely what is actually visible in the image.\n\nPay particular attention to:\n- Cars or vehicle parts\n- Dents\n- Scratches\n- Collision damage\n- Broken parts\n- Cracked lights or glass\n- Accident damage\n- Poor repair work\n- Safety concerns\n\nIf vehicle damage is visible, explicitly describe:\n1. The damaged vehicle part.\n2. The type of damage.\n3. How serious the visible damage appears.\n\nDo not focus on unrelated background objects unless they are the main subject of the image.\n\nReturn only a clear plain-text description of the image.\nDo not return JSON.",
+        "inputType": "base64",
+        "binaryPropertyName": "Attach_a_photo__video__or_voice_note",
+        "options": {
+          "maxTokens": 1000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -672,
+        -512
+      ],
+      "id": "92dcb9e7-9e10-4360-9c68-b0b837749f2f",
+      "name": "Analyze image",
+      "credentials": {
+        "openAiApi": {
+          "id": "fAtROzqWQj3IPD11",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $binary.Attach_a_photo__video__or_voice_note.mimeType }} ",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    },
+                    "id": "7d4ecb89-f81e-4740-adfd-d00b6846afa6"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "7984ac2d-2cc2-4e13-a635-bd318f67b291",
+                    "leftValue": "={{ $binary.Attach_a_photo__video__or_voice_note.mimeType }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "7e16a733-821d-470e-a88b-4c5f6c2e89e0",
+                    "leftValue": "={{ $binary.Attach_a_photo__video__or_voice_note.mimeType }}",
+                    "rightValue": "video",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "looseTypeValidation": "={{ false }}",
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -960,
+        -384
+      ],
+      "id": "26d7aaf7-266e-4670-980f-acb132183049",
+      "name": "Detect Input Type"
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "binaryPropertyName": "={{ Object.keys($binary)[0] }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -544,
+        -336
+      ],
+      "id": "1c84f437-5d4e-440c-99a1-37eb346fd4a0",
+      "name": "Transcribe a recording",
+      "credentials": {
+        "openAiApi": {
+          "id": "fAtROzqWQj3IPD11",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "953c5d60-ae10-4ab8-9e1f-6f140bc0d915",
+              "name": "additional_evidence",
+              "value": "No image or audio evidence was provided.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -688,
+        -192
+      ],
+      "id": "d733347e-3fd7-403b-944e-babd0ac56224",
+      "name": "Prepare Text Feedback"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "51b9bf5d-af8e-4e79-8fa5-e15eee972241",
+              "name": "={{ \n  $json\n    .flatMap(item => item.content || [])\n    .find(content => content.type === 'output_text')\n    ?.text || ''\n}}",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "a80c4ca1-61c3-4aed-badc-a1bdf9c18b2e",
+              "name": "additional_evidence",
+              "value": "={{ $json.output   ?.filter(item => item.type === 'message')   ?.flatMap(item => item.content || [])   ?.find(content => content.type === 'output_text')   ?.text || 'No image analysis available' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -448,
+        -480
+      ],
+      "id": "8d0c7426-856e-45c0-a973-86f15769ad26",
+      "name": "Prepare Image Feedback"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Detect Input Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify Feedback",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Analyze Sentiment",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Sentiment": {
+      "main": [
+        [
+          {
+            "node": "Response Email to consumer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Feedback": {
+      "main": [
+        [
+          {
+            "node": "If Escalated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message to company": {
+      "main": [
+        [
+          {
+            "node": "Notify Customer - Escalated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Response Email to consumer": {
+      "main": [
+        [
+          {
+            "node": "DataBase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Escalated": {
+      "main": [
+        [
+          {
+            "node": "Send a message to company",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Analyze Sentiment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Customer - Escalated": {
+      "main": [
+        [
+          {
+            "node": "DataBase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Input Type": {
+      "main": [
+        [
+          {
+            "node": "Analyze image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Transcribe a recording",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        [
+          {
+            "node": "Prepare Text Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze image": {
+      "main": [
+        [
+          {
+            "node": "Prepare Image Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe a recording": {
+      "main": [
+        [
+          {
+            "node": "Classify Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Image Feedback": {
+      "main": [
+        [
+          {
+            "node": "Classify Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Text Feedback": {
+      "main": [
+        [
+          {
+            "node": "Classify Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6a09d7df-afca-4f4d-9fc1-700392f6e23f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c33f2188d42fb0fc4a959ab90b68e73a9353b189051bc0b71ca8a2308a5c3404"
+  },
+  "nodeGroups": [],
+  "id": "Rp7MAA5SgQk7tdnh",
+  "tags": []
+}
