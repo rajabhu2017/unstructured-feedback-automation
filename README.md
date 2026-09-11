@@ -177,7 +177,3 @@ This repository contains the n8n workflow export. External services such
 as OpenAI, Gmail, and Google Sheets require their own credentials and
 configuration.
 
-## License
-
-Add a license if you want others to reuse, modify, or distribute the
-workflow.
