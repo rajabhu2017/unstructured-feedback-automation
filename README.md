@@ -1,4 +1,4 @@
-# Unstructured Customer Feedback automation
+# Unstructured Customer Feedback Automation
 
 An n8n workflow that collects customer feedback in text, image, or audio
 form, uses OpenAI models to analyze the available feedback, classifies
