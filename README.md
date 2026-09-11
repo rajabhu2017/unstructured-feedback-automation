@@ -144,35 +144,6 @@ The classification step returns structured JSON with:
 
 The classification uses the available feedback evidence rather than
 requiring the customer to select a category.
-
-## Repository Structure
-
-Recommended structure:
-
-``` text
-.
-├── README.md
-├── Unstructured_Feedback_Workflow.json
-└── screenshots/
-    └── workflow-overview.png
-```
-
-The JSON workflow is the essential file required to share the
-automation.
-
-## Important
-
-Before uploading the workflow to a public GitHub repository:
-
--   Remove or replace personal email addresses.
--   Remove or replace any private Google Sheets references.
--   Review exported credential references and other instance-specific
-    metadata.
--   Do not commit API keys, OAuth tokens, passwords, or other secrets.
--   Test the sanitized workflow before publishing it.
-
-## Current Scope
-
 This repository contains the n8n workflow export. External services such
 as OpenAI, Gmail, and Google Sheets require their own credentials and
 configuration.
